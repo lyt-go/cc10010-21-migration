@@ -56,9 +56,9 @@ npm run dev
 | 运行实例 | `runtime` | 运行记录 | 记录编号、作业名称、开始时间 |
 | 异常重跑 | `rerun` | 重跑任务 | 任务编号、原始运行编号、重跑区间开始 |
 | 基线管理 | `baseline` | 基线定义 | 基线编号、基线名称、承诺完成时间 |
-| 分区检测 | `partitioncheck` | 检测规则 | 规则编号、数据表名、期望分区数 |
+| 分区检测 | `partitioncheck` | 检测规则 | 规则编号、数据表名、期望分区数、日期键、分区字段、兼容标记 |
 | 数据比对 | `comparator` | 比对任务 | 任务编号、源表名、目标表名 |
-| 元数据存储 | `metastore` | 元数据表 | 表编号、表名、所属数仓层 |
+| 元数据存储 | `metastore` | 元数据表 | 表编号、表名、所属数仓层、日期键、分区字段 |
 | 资源配置 | `resource` | 资源池 | 池编号、池名称、最大并发数 |
 | SLA监控 | `slavalidate` | SLA规则 | 规则编号、适用作业、完成截止时间 |
 | SQL模板 | `sqltpl` | 模板定义 | 模板编号、模板名称、模板类型 |
@@ -73,6 +73,53 @@ npm run dev
   `backend/app/routers/<模块>.py`，业务规则在 `backend/app/services/<模块>.py`。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+
+## 分区检测规则迁移（数量口径 → 日期键口径）
+
+历史分区检测规则只存自由文本表名和期望分区数，无法表达日期键、分区字段和
+历史分区标识。迁移把旧规则转换成带日期键的规则数据快照，同时保持旧规则可读。
+
+- 日期键/分区字段的唯一定义在 `backend/app/partition_rules.py`
+  （`DATE_KEY = "dt"`、`PARTITION_FIELD = "dt"`），示例数据、迁移脚本、
+  部署运行共用同一份常量。
+- 兼容标记决定缺失分区计算：`数量口径` 按 期望数 - 实际数；`日期键口径` /
+  `双口径等价` 按快照日期键展开窗口后逐个比对；`待确认` 是尚未迁移的旧库
+  记录，检测任务仍按数量口径读取。
+- 迁移后每条结论保留 `规则编号`/`来源规则编号`/`规则来源`，缺失分区清单的
+  每一项也带原规则编号。
+- 同一规则编号只生成一个快照版本（`rule_code` 主键 + 内容指纹去重）；
+  每条规则一个事务并写检查点，中途失败后再次执行从最后一条完整规则继续。
+
+```bash
+cd backend
+# 1) 可选：造一个只有旧表结构的示例库
+python3 scripts/partition_rule_migration.py seed-legacy --db ./var/etl.sqlite3
+# 2) 迁移并回填日期键快照（可重复执行；--stop-after / --fail-rule 模拟中断）
+python3 scripts/partition_rule_migration.py migrate --db ./var/etl.sqlite3
+# 3) 自检：原规则编号保留、日期键齐全、无重复版本
+python3 scripts/partition_rule_migration.py verify --db ./var/etl.sqlite3
+```
+
+部署时设置 `PARTITION_DB_PATH` 指向旧库/迁移产物，分区检测与元数据存储会从
+这里加载同一日期键；不设置则使用内置示例数据。
+
+```bash
+PARTITION_DB_PATH=./var/etl.sqlite3 ./run.sh
+```
+
+自检接口：
+
+- `GET /api/partitioncheck/compatibility`：兼容标记分布、待确认与口径冲突规则
+- `GET /api/partitioncheck/conclusions`：缺失分区清单与分区完整性结论
+- `GET /api/metastore/partition-conclusions`：元数据存储侧按表汇总的分区结论
+- `GET /api/partitioncheck/consistency`、`GET /api/metastore/consistency`：
+  核对两个模块读取的日期键与分区字段是否一致
+
+测试：
+
+```bash
+cd backend && .venv/bin/python -m unittest discover -s tests -v
+```
 
 领域：数据工程
 子方向：数仓与数据湖

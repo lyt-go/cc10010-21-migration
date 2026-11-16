@@ -1,7 +1,13 @@
-"""运行配置：端口、跨域、运行环境。"""
+"""运行配置：端口、跨域、运行环境与旧数据库位置。"""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+
+
+def _partition_db_path() -> str | None:
+    raw = os.environ.get("PARTITION_DB_PATH") or os.environ.get("APP_DB_PATH")
+    return raw.strip() if raw and raw.strip() else None
 
 
 @dataclass(frozen=True)
@@ -17,6 +23,8 @@ class Settings:
     )
     page_size_default: int = 20
     page_size_max: int = 200
+    # 旧数据库/迁移产物位置；为空时使用内置示例数据。
+    partition_db_path: str | None = field(default_factory=_partition_db_path)
 
 
 settings = Settings()

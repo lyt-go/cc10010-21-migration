@@ -5,6 +5,9 @@ services:
       - "8000:8000"
     environment:
       - APP_ENV=local
+      - PARTITION_DB_PATH=/srv/app/var/etl.sqlite3
+    volumes:
+      - ./backend/var:/srv/app/var
   frontend:
     build: ./frontend
     ports:

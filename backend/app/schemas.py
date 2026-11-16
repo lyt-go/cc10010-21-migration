@@ -114,7 +114,11 @@ class BaselineEntry(BaseModel):
     field_7: str | None = None  # 节假日偏移
 
 class PartitioncheckEntry(BaseModel):
-    """检测规则明细结构。"""
+    """检测规则明细结构。
+
+    历史规则只填前三个字段；带日期键的规则额外填 ``日期键``/``分区字段``/
+    ``历史分区标识``/``兼容标记``，缺失分区按日期键口径计算。
+    """
 
     field_0: str | None = None  # 规则编号
     field_1: str | None = None  # 数据表名
@@ -124,6 +128,12 @@ class PartitioncheckEntry(BaseModel):
     field_5: str | None = None  # 检测间隔分钟
     field_6: str | None = None  # 自动补齐开关
     field_7: str | None = None  # 补齐优先级
+    date_key: str | None = None  # 日期键
+    partition_field: str | None = None  # 分区字段
+    legacy_partition_id: str | None = None  # 历史分区标识
+    compat_mode: str | None = None  # 兼容标记：数量口径 / 日期键口径 / 双口径等价 / 待确认
+    source_rule_code: str | None = None  # 来源规则编号（迁移后保留原规则编号）
+    snapshot_version: int | None = None  # 快照版本
 
 class ComparatorEntry(BaseModel):
     """比对任务明细结构。"""
@@ -138,7 +148,11 @@ class ComparatorEntry(BaseModel):
     field_7: str | None = None  # 产出差异报告
 
 class MetastoreEntry(BaseModel):
-    """元数据表明细结构。"""
+    """元数据表明细结构。
+
+    ``日期键`` 与 ``分区字段`` 跟随分区检测的迁移快照更新；``分区完整性结论``
+    和 ``缺失分区数`` 来自分区检测结论的跨模块同步。
+    """
 
     field_0: str | None = None  # 表编号
     field_1: str | None = None  # 表名
@@ -148,6 +162,10 @@ class MetastoreEntry(BaseModel):
     field_5: str | None = None  # 主键字段
     field_6: str | None = None  # 数据量级
     field_7: str | None = None  # 最近更新时间
+    date_key: str | None = None  # 日期键
+    partition_rules: list[str] | None = None  # 关联分区规则编号
+    missing_partition_count: int | None = None  # 缺失分区数
+    partition_integrity: str | None = None  # 分区完整性结论
 
 class ResourceEntry(BaseModel):
     """资源池明细结构。"""
